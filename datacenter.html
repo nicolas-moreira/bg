@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>xatframe — datacenter</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05040a; cursor: default; }
+  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; }
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 2;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%);
+  }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0.04;
+    mix-blend-mode: overlay; z-index: 3;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.6'/></svg>");
+  }
+  .fallback {
+    position: fixed; inset: 0; z-index: 0;
+    background: radial-gradient(circle at 50% 50%, #1a0b2e 0%, #05040a 70%);
+  }
+</style>
+</head>
+<body>
+  <div class="fallback" aria-hidden="true"></div>
+  <canvas id="c" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.162.0/build/three.module.js';
+
+const canvas = document.getElementById('c');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+} catch (e) { canvas.style.display = 'none'; throw e; }
+
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x05040a, 1);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x05040a, 0.04);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0, 4, 18);
+camera.lookAt(0, 0, 0);
+
+// === GRID FLOOR ===
+const grid = new THREE.GridHelper(60, 60, 0x8b5cf6, 0x1a0b2e);
+grid.material.transparent = true;
+grid.material.opacity = 0.25;
+grid.position.y = -4;
+scene.add(grid);
+
+// === GENERATE NETWORK TOPOLOGY ===
+const NODE_COUNT = 28;
+const CONNECTION_DIST = 6;
+const nodes = [];
+
+// 3 clusters (like multi-region datacenters)
+const clusterCenters = [
+  new THREE.Vector3(-7, 0, -2),
+  new THREE.Vector3(6, 1, 3),
+  new THREE.Vector3(0, -1, -6),
+];
+
+for (let i = 0; i < NODE_COUNT; i++) {
+  const cluster = clusterCenters[i % 3];
+  const pos = new THREE.Vector3(
+    cluster.x + (Math.random() - 0.5) * 7,
+    cluster.y + (Math.random() - 0.5) * 4,
+    cluster.z + (Math.random() - 0.5) * 7,
+  );
+  nodes.push({
+    pos,
+    basePulse: Math.random() * Math.PI * 2,
+    connections: [],
+  });
+}
+
+// Connect nearby nodes
+const edges = [];
+for (let i = 0; i < NODE_COUNT; i++) {
+  for (let j = i + 1; j < NODE_COUNT; j++) {
+    const d = nodes[i].pos.distanceTo(nodes[j].pos);
+    if (d < CONNECTION_DIST) {
+      nodes[i].connections.push(j);
+      edges.push({ a: i, b: j, dist: d });
+    }
+  }
+}
+
+// === SERVER RACK NODES (instanced boxes) ===
+const nodeGeo = new THREE.BoxGeometry(0.45, 0.8, 0.45);
+const nodeMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.9 });
+const nodeMesh = new THREE.InstancedMesh(nodeGeo, nodeMat, NODE_COUNT);
+const dummy = new THREE.Object3D();
+const nodeColors = new Float32Array(NODE_COUNT * 3);
+for (let i = 0; i < NODE_COUNT; i++) {
+  dummy.position.copy(nodes[i].pos);
+  dummy.updateMatrix();
+  nodeMesh.setMatrixAt(i, dummy.matrix);
+  nodeColors[i * 3] = 0.55; nodeColors[i * 3 + 1] = 0.36; nodeColors[i * 3 + 2] = 0.96;
+}
+nodeMesh.instanceColor = new THREE.InstancedBufferAttribute(nodeColors, 3);
+scene.add(nodeMesh);
+
+// Wireframe overlay around each node
+const wireGeo = new THREE.BoxGeometry(0.55, 0.92, 0.55);
+const wireMat = new THREE.LineBasicMaterial({ color: 0xf0abfc, transparent: true, opacity: 0.45 });
+const edgesGeo = new THREE.EdgesGeometry(wireGeo);
+for (let i = 0; i < NODE_COUNT; i++) {
+  const lines = new THREE.LineSegments(edgesGeo, wireMat);
+  lines.position.copy(nodes[i].pos);
+  scene.add(lines);
+}
+
+// === CONNECTION LINES ===
+const linePositions = [];
+for (const e of edges) {
+  linePositions.push(nodes[e.a].pos.x, nodes[e.a].pos.y, nodes[e.a].pos.z);
+  linePositions.push(nodes[e.b].pos.x, nodes[e.b].pos.y, nodes[e.b].pos.z);
+}
+const lineGeo = new THREE.BufferGeometry();
+lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+const lineMat = new THREE.LineBasicMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.22 });
+scene.add(new THREE.LineSegments(lineGeo, lineMat));
+
+// === DATA PACKETS (glowing dots traveling on edges) ===
+const PACKETS_PER_EDGE = 1;
+const packets = [];
+for (let i = 0; i < edges.length; i++) {
+  for (let j = 0; j < PACKETS_PER_EDGE; j++) {
+    packets.push({
+      edge: i,
+      t: Math.random(),
+      speed: 0.12 + Math.random() * 0.25,
+      dir: Math.random() > 0.5 ? 1 : -1,
+    });
+  }
+}
+
+const packetGeo = new THREE.SphereGeometry(0.12, 8, 8);
+const packetMat = new THREE.MeshBasicMaterial({ color: 0xf0abfc, transparent: true, opacity: 0.95 });
+const packetMesh = new THREE.InstancedMesh(packetGeo, packetMat, packets.length);
+scene.add(packetMesh);
+
+// Packet glow halos (larger transparent spheres)
+const haloGeo = new THREE.SphereGeometry(0.35, 8, 8);
+const haloMat = new THREE.MeshBasicMaterial({ color: 0xf0abfc, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending });
+const haloMesh = new THREE.InstancedMesh(haloGeo, haloMat, packets.length);
+scene.add(haloMesh);
+
+// === CORE GLOW at scene center ===
+const coreGeo = new THREE.SphereGeometry(0.6, 16, 16);
+const coreMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+const core = new THREE.Mesh(coreGeo, coreMat);
+core.position.set(0, 0, 0);
+scene.add(core);
+
+const coreHaloGeo = new THREE.SphereGeometry(1.8, 16, 16);
+const coreHaloMat = new THREE.MeshBasicMaterial({ color: 0xec4899, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending });
+const coreHalo = new THREE.Mesh(coreHaloGeo, coreHaloMat);
+scene.add(coreHalo);
+
+// === MOUSE ===
+const targetMouse = new THREE.Vector2(0, 0);
+const currentMouse = new THREE.Vector2(0, 0);
+window.addEventListener('pointermove', (e) => {
+  targetMouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  targetMouse.y = -((e.clientY / window.innerHeight) * 2 - 1);
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+let running = true;
+document.addEventListener('visibilitychange', () => {
+  running = !document.hidden;
+  if (running) requestAnimationFrame(loop);
+});
+
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const start = performance.now();
+const packetDummy = new THREE.Object3D();
+const tmpA = new THREE.Vector3();
+const tmpB = new THREE.Vector3();
+
+function loop() {
+  if (!running) return;
+  const t = reduced ? 0 : (performance.now() - start) * 0.001;
+
+  // Smooth mouse
+  currentMouse.x += (targetMouse.x - currentMouse.x) * 0.05;
+  currentMouse.y += (targetMouse.y - currentMouse.y) * 0.05;
+
+  // Camera slow orbit + mouse parallax
+  const orbit = t * 0.05;
+  camera.position.x = Math.sin(orbit) * 18 + currentMouse.x * 3;
+  camera.position.z = Math.cos(orbit) * 18;
+  camera.position.y = 4 + currentMouse.y * 2 + Math.sin(t * 0.2) * 0.5;
+  camera.lookAt(0, 0, 0);
+
+  // Pulse nodes (vary instance color brightness)
+  for (let i = 0; i < NODE_COUNT; i++) {
+    const pulse = 0.5 + 0.5 * Math.sin(t * 1.5 + nodes[i].basePulse);
+    const b = 0.5 + pulse * 0.5; // 0.5 to 1.0
+    nodeColors[i * 3]     = 0.35 + b * 0.4;
+    nodeColors[i * 3 + 1] = 0.22 + b * 0.3;
+    nodeColors[i * 3 + 2] = 0.6 + b * 0.4;
+  }
+  nodeMesh.instanceColor.needsUpdate = true;
+
+  // Move packets along edges
+  for (let i = 0; i < packets.length; i++) {
+    const pk = packets[i];
+    pk.t += pk.speed * pk.dir * 0.01;
+    if (pk.t > 1) { pk.t = 0; pk.dir = Math.random() > 0.5 ? 1 : -1; }
+    if (pk.t < 0) { pk.t = 1; pk.dir = Math.random() > 0.5 ? 1 : -1; }
+    const e = edges[pk.edge];
+    tmpA.copy(nodes[e.a].pos);
+    tmpB.copy(nodes[e.b].pos);
+    packetDummy.position.lerpVectors(tmpA, tmpB, pk.t);
+    packetDummy.updateMatrix();
+    packetMesh.setMatrixAt(i, packetDummy.matrix);
+    haloMesh.setMatrixAt(i, packetDummy.matrix);
+  }
+  packetMesh.instanceMatrix.needsUpdate = true;
+  haloMesh.instanceMatrix.needsUpdate = true;
+
+  // Core pulse
+  const corePulse = 0.4 + 0.3 * Math.sin(t * 0.8);
+  core.scale.setScalar(1 + corePulse * 0.2);
+  coreHalo.scale.setScalar(1 + corePulse * 0.4);
+  coreHalo.rotation.y += 0.002;
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
