@@ -235,15 +235,33 @@
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
     }
 
-    // === BIG ANIMATED ICP·BOTS TEXT ===
+    // === HUGE ICP·BOTS WATERMARK (behind chat, very subtle) ===
     const t = now * 0.001;
     const pulseTxt = 0.5 + 0.5 * Math.sin(t * 1.2);
-    const fontSize = Math.min(w * 0.14, h * 0.22, 200);
-    ctx.font = `900 ${fontSize}px -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`;
+    const bigFontSize = Math.min(w * 0.2, h * 0.35, 280);
+    ctx.font = `900 ${bigFontSize}px -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    const bigX = w / 2;
+    const bigY = h / 2;
+
+    // Watermark stroke only (super subtle)
+    ctx.save();
+    ctx.globalAlpha = 0.06 + pulseTxt * 0.03;
+    ctx.lineWidth = 2;
+    const wmGrad = ctx.createLinearGradient(bigX - bigFontSize * 2, bigY, bigX + bigFontSize * 2, bigY);
+    wmGrad.addColorStop(0, '#8b5cf6');
+    wmGrad.addColorStop(0.5, '#ec4899');
+    wmGrad.addColorStop(1, '#06b6d4');
+    ctx.strokeStyle = wmGrad;
+    ctx.strokeText('ICP·BOTS', bigX, bigY);
+    ctx.restore();
+
+    // === VISIBLE ICP·BOTS AT TOP ===
+    const fontSize = Math.min(w * 0.055, 72);
+    ctx.font = `900 ${fontSize}px -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`;
     const textX = w / 2;
-    const textY = h / 2;
+    const textY = fontSize * 0.65 + 14;
 
     // Multiple glow layers (stack shadowBlur passes for intensity)
     ctx.save();
