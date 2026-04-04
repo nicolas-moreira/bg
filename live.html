@@ -114,22 +114,41 @@
     const planGroups = { starter: [], pro: [], enterprise: [] };
     bots.forEach((b) => { if (planGroups[b.plan]) planGroups[b.plan].push(b); else planGroups.starter.push(b); });
 
+    // Safe zone = where the xat chat usually is (center)
+    const safeW = Math.min(700, w * 0.55);
+    const safeH = Math.min(520, h * 0.7);
+    const safeLeft = cx - safeW / 2;
+    const safeRight = cx + safeW / 2;
+    const safeTop = cy - safeH / 2;
+    const safeBottom = cy + safeH / 2;
+
+    const inSafeZone = (x, y) => x > safeLeft && x < safeRight && y > safeTop && y < safeBottom;
+
     const clusters = [
-      { name: 'starter',    cx: w * 0.22, cy: cy, r: Math.min(w, h) * 0.18 },
-      { name: 'pro',        cx: cx,       cy: cy, r: Math.min(w, h) * 0.22 },
-      { name: 'enterprise', cx: w * 0.78, cy: cy, r: Math.min(w, h) * 0.18 },
+      { name: 'starter',    cx: w * 0.12, cy: cy, r: Math.min(w, h) * 0.22 },
+      { name: 'pro',        cx: cx,       cy: cy, r: Math.min(w, h) * 0.45 },
+      { name: 'enterprise', cx: w * 0.88, cy: cy, r: Math.min(w, h) * 0.22 },
     ];
 
     nodes = [];
     clusters.forEach((cluster) => {
       const group = planGroups[cluster.name];
       group.forEach((b, i) => {
-        const angle = (i / Math.max(group.length, 1)) * Math.PI * 2 + Math.random() * 0.3;
-        const radius = cluster.r * (0.5 + Math.random() * 0.5);
+        // Try to place node outside safe zone
+        let x = 0, y = 0, tries = 0;
+        do {
+          const angle = (i / Math.max(group.length, 1)) * Math.PI * 2 + Math.random() * 0.5;
+          const radius = cluster.r * (0.6 + Math.random() * 0.5);
+          x = cluster.cx + Math.cos(angle) * radius;
+          y = cluster.cy + Math.sin(angle) * radius;
+          tries++;
+        } while (inSafeZone(x, y) && tries < 20);
+        // Clamp to screen margins
+        x = Math.max(30, Math.min(w - 30, x));
+        y = Math.max(30, Math.min(h - 30, y));
         nodes.push({
           bot: b,
-          x: cluster.cx + Math.cos(angle) * radius,
-          y: cluster.cy + Math.sin(angle) * radius,
+          x, y,
           cluster: cluster.name,
           pulse: Math.random() * Math.PI * 2,
         });
@@ -215,6 +234,65 @@
     for (let y = 0; y < h; y += gridSize) {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
     }
+
+    // === BIG ANIMATED ICP·BOTS TEXT ===
+    const t = now * 0.001;
+    const pulseTxt = 0.5 + 0.5 * Math.sin(t * 1.2);
+    const fontSize = Math.min(w * 0.14, h * 0.22, 200);
+    ctx.font = `900 ${fontSize}px -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const textX = w / 2;
+    const textY = h / 2;
+
+    // Multiple glow layers (stack shadowBlur passes for intensity)
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Outer violet glow
+    ctx.shadowColor = '#8b5cf6';
+    ctx.shadowBlur = 80 + pulseTxt * 40;
+    ctx.fillStyle = 'rgba(139,92,246,0.12)';
+    ctx.fillText('ICP·BOTS', textX, textY);
+
+    // Mid cyan glow
+    ctx.shadowColor = '#06b6d4';
+    ctx.shadowBlur = 50 + pulseTxt * 25;
+    ctx.fillStyle = 'rgba(6,182,212,0.1)';
+    ctx.fillText('ICP·BOTS', textX, textY);
+
+    // Pink inner glow
+    ctx.shadowColor = '#ec4899';
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = 'rgba(236,72,153,0.08)';
+    ctx.fillText('ICP·BOTS', textX, textY);
+
+    ctx.restore();
+
+    // Gradient fill for the main text
+    const grad = ctx.createLinearGradient(textX - fontSize * 2, textY, textX + fontSize * 2, textY);
+    grad.addColorStop(0,    '#8b5cf6');
+    grad.addColorStop(0.5,  '#ec4899');
+    grad.addColorStop(1,    '#06b6d4');
+
+    // Main text outline
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = grad;
+    ctx.globalAlpha = 0.35 + pulseTxt * 0.25;
+    ctx.strokeText('ICP·BOTS', textX, textY);
+    ctx.globalAlpha = 1;
+
+    // Scan line effect — bright horizontal slice moving up/down
+    const scanY = textY + Math.sin(t * 0.4) * fontSize * 0.3;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, scanY - 4, w, 8);
+    ctx.clip();
+    ctx.fillStyle = grad;
+    ctx.globalAlpha = 0.7;
+    ctx.fillText('ICP·BOTS', textX, textY);
+    ctx.restore();
+    ctx.globalAlpha = 1;
 
     // Connections
     ctx.strokeStyle = 'rgba(6,182,212,0.15)';
