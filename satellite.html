@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>xatframe — satellite</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05040a; cursor: default; font-family: -apple-system, "SF Pro Display", Arial, sans-serif; color: #fafafa; }
+  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+  .overlay {
+    position: fixed; top: 16px; left: 16px; z-index: 10;
+    background: rgba(5, 4, 10, 0.75);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    padding: 10px 14px; font-size: 10px;
+    backdrop-filter: blur(8px); font-family: "SF Mono", Monaco, monospace;
+    letter-spacing: 0.04em;
+  }
+  .overlay-brand { color: #8b5cf6; font-weight: 700; letter-spacing: 0.12em; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .overlay-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; color: rgba(250,250,250,0.55); }
+  .overlay-dot { width: 6px; height: 6px; border-radius: 50%; background: #4ADE80; box-shadow: 0 0 8px rgba(74,222,128,0.6); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .vignette { position: fixed; inset: 0; pointer-events: none; z-index: 2;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%); }
+  .grain { position: fixed; inset: 0; pointer-events: none; opacity: 0.03; mix-blend-mode: overlay; z-index: 3;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.6'/></svg>"); }
+</style>
+</head>
+<body>
+  <canvas id="c" aria-hidden="true"></canvas>
+  <div class="overlay">
+    <div class="overlay-brand">ICP·BOTS / NETWORK</div>
+    <div class="overlay-row"><span class="overlay-dot"></span>SATELLITE ONLINE</div>
+    <div class="overlay-row">ORBIT: STABLE</div>
+  </div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.162.0/build/three.module.js';
+
+const ACCENT = '#8b5cf6';  // violet ICPBots
+
+const canvas = document.getElementById('c');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+} catch (e) { canvas.style.display = 'none'; throw e; }
+
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x05040a, 1);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x05040a, 0.035);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0, 0, 8);
+camera.lookAt(0, 0, 0);
+
+// === STARFIELD ===
+const starsGeo = new THREE.BufferGeometry();
+const starCount = 600;
+const starPos = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount; i++) {
+  starPos[i*3]   = (Math.random() - 0.5) * 80;
+  starPos[i*3+1] = (Math.random() - 0.5) * 80;
+  starPos[i*3+2] = (Math.random() - 0.5) * 80;
+}
+starsGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.06, transparent: true, opacity: 0.8 });
+scene.add(new THREE.Points(starsGeo, starMat));
+
+// === SATELLITE (ported from WireframeServer.jsx) ===
+const wireframeMat = new THREE.MeshBasicMaterial({
+  color: ACCENT,
+  wireframe: true,
+  transparent: true,
+  opacity: 0.7,
+  side: THREE.DoubleSide,
+});
+
+function createHexGeo(radius = 0.25, depth = 0.05) {
+  const shape = new THREE.Shape();
+  const sides = 6;
+  const angleStep = (Math.PI * 2) / sides;
+  for (let i = 0; i <= sides; i++) {
+    const a = i * angleStep - Math.PI / 2;
+    const x = Math.cos(a) * radius;
+    const y = Math.sin(a) * radius;
+    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+  }
+  return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+}
+
+function createSolarPanel(hexRadius, rows, cols) {
+  const hexes = [];
+  const hexHeight = Math.sqrt(3) * hexRadius;
+  const hexWidth = hexRadius * 2;
+  for (let row = 0; row < rows; row++) {
+    const offsetX = row % 2 === 1 ? hexWidth * 0.5 : 0;
+    const colsInRow = row % 2 === 1 ? cols - 1 : cols;
+    for (let col = 0; col < colsInRow; col++) {
+      const x = col * hexWidth + offsetX;
+      const y = row * (hexHeight * 0.75);
+      hexes.push({
+        x: x - (colsInRow * hexWidth * 0.5 - (row % 2 === 1 ? hexWidth * 0.25 : 0)),
+        y: y - (rows * hexHeight * 0.75 * 0.5),
+      });
+    }
+  }
+  return hexes;
+}
+
+const satellite = new THREE.Group();
+scene.add(satellite);
+
+// Corps central (cube)
+satellite.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 1.2), wireframeMat));
+
+// Antenna
+satellite.add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4), wireframeMat).translateZ(0.8));
+const ant1 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), wireframeMat);
+ant1.position.set(0.3, 0, 0.7);
+satellite.add(ant1);
+const ant2 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), wireframeMat);
+ant2.position.set(-0.3, 0, 0.7);
+satellite.add(ant2);
+
+// Panels
+const hexGeo = createHexGeo(0.25, 0.05);
+const smallHexGeo = createHexGeo(0.15, 0.05);
+
+// Left panel
+const leftPanel = new THREE.Group();
+leftPanel.position.set(-1.2, 0, 0);
+leftPanel.rotation.z = -0.3;
+const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.5, 0.1), wireframeMat);
+leftArm.position.set(-0.6, 0, 0);
+leftPanel.add(leftArm);
+createSolarPanel(0.25, 3, 5).forEach((hex) => {
+  const m = new THREE.Mesh(hexGeo, wireframeMat);
+  m.position.set(hex.x - 0.6, hex.y, 0.05);
+  leftPanel.add(m);
+});
+satellite.add(leftPanel);
+
+// Right panel
+const rightPanel = new THREE.Group();
+rightPanel.position.set(1.2, 0, 0);
+rightPanel.rotation.z = 0.3;
+const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.5, 0.1), wireframeMat);
+rightArm.position.set(0.6, 0, 0);
+rightPanel.add(rightArm);
+createSolarPanel(0.25, 3, 5).forEach((hex) => {
+  const m = new THREE.Mesh(hexGeo, wireframeMat);
+  m.position.set(hex.x + 0.6, hex.y, 0.05);
+  rightPanel.add(m);
+});
+satellite.add(rightPanel);
+
+// Back panel (top angled)
+const backPanel = new THREE.Group();
+backPanel.position.set(0, 1, 0);
+backPanel.rotation.x = Math.PI / 4;
+createSolarPanel(0.15, 2, 3).forEach((hex) => {
+  const m = new THREE.Mesh(smallHexGeo, wireframeMat);
+  m.position.set(hex.x, hex.y, 0.02);
+  backPanel.add(m);
+});
+satellite.add(backPanel);
+
+// LEDs
+[[0,0,0.6],[0.3,0,0.5],[-0.3,0,0.5],[0.5,0,0],[-0.5,0,0]].forEach((p) => {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), wireframeMat);
+  m.position.set(...p);
+  satellite.add(m);
+});
+
+// === CENTRAL CORE (ICP·BOTS sun) ===
+const coreGroup = new THREE.Group();
+scene.add(coreGroup);
+
+const core = new THREE.Mesh(
+  new THREE.SphereGeometry(0.35, 24, 24),
+  new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.9 })
+);
+coreGroup.add(core);
+
+const coreHalo = new THREE.Mesh(
+  new THREE.SphereGeometry(0.7, 24, 24),
+  new THREE.MeshBasicMaterial({ color: 0xec4899, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending })
+);
+coreGroup.add(coreHalo);
+
+const coreOuter = new THREE.Mesh(
+  new THREE.SphereGeometry(1.4, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending })
+);
+coreGroup.add(coreOuter);
+
+// Core wireframe octahedron (tech vibe)
+const coreWire = new THREE.Mesh(
+  new THREE.OctahedronGeometry(0.5, 0),
+  new THREE.MeshBasicMaterial({ color: 0xf0abfc, wireframe: true, transparent: true, opacity: 0.5 })
+);
+coreGroup.add(coreWire);
+
+// === ORBITAL TRAIL RING ===
+const trailGeo = new THREE.RingGeometry(3.9, 4.0, 128);
+const trailMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.1, side: THREE.DoubleSide });
+const trail = new THREE.Mesh(trailGeo, trailMat);
+trail.rotation.x = Math.PI / 2;
+scene.add(trail);
+
+// === MOUSE ===
+const targetMouse = new THREE.Vector2(0, 0);
+const mouse = new THREE.Vector2(0, 0);
+window.addEventListener('pointermove', (e) => {
+  targetMouse.x = (e.clientX / window.innerWidth - 0.5) * 2;
+  targetMouse.y = -(e.clientY / window.innerHeight - 0.5) * 2;
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+let running = true;
+document.addEventListener('visibilitychange', () => {
+  running = !document.hidden;
+  if (running) requestAnimationFrame(loop);
+});
+
+const start = performance.now();
+function loop() {
+  if (!running) return;
+  const time = (performance.now() - start) * 0.001;
+
+  // Smooth mouse
+  mouse.x += (targetMouse.x - mouse.x) * 0.04;
+  mouse.y += (targetMouse.y - mouse.y) * 0.04;
+
+  // === SATELLITE ORBIT (circular around core) ===
+  const orbitRadius = 4;
+  const orbitSpeed = 0.18;
+  const angle = time * orbitSpeed;
+  satellite.position.x = Math.cos(angle) * orbitRadius;
+  satellite.position.y = Math.sin(angle * 0.5) * 1.2;
+  satellite.position.z = Math.sin(angle) * orbitRadius;
+  satellite.rotation.y = angle + Math.PI / 2;
+  satellite.rotation.x = Math.sin(time * 0.1) * 0.1;
+
+  // Solar panels gentle flap
+  leftPanel.rotation.z = -0.3 + Math.sin(time * 0.1) * 0.05;
+  rightPanel.rotation.z = 0.3 - Math.sin(time * 0.1) * 0.05;
+
+  // Core pulse
+  const pulse = 0.5 + 0.5 * Math.sin(time * 1.2);
+  core.scale.setScalar(1 + pulse * 0.08);
+  coreHalo.scale.setScalar(1 + pulse * 0.15);
+  coreWire.rotation.x = time * 0.3;
+  coreWire.rotation.y = time * 0.4;
+
+  // Trail ring rotation
+  trail.rotation.z = time * 0.05;
+
+  // Camera mouse parallax
+  camera.position.x = mouse.x * 1.5;
+  camera.position.y = mouse.y * 1.0;
+  camera.position.z = 8;
+  camera.lookAt(0, 0, 0);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
