@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>xatframe</title>
+<style>
+  :root {
+    /* === CHANGE THESE 5 COLORS TO CUSTOMIZE === */
+    --bg:  #0a0612;
+    --c1:  #8b5cf6;  /* violet */
+    --c2:  #06b6d4;  /* cyan */
+    --c3:  #ec4899;  /* pink */
+    --c4:  #6d28d9;  /* deep purple */
+    --c5:  #0ea5e9;  /* sky */
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .scene {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.55;
+    mix-blend-mode: screen;
+    will-change: transform;
+  }
+
+  .blob.b1 { width: 60vw; height: 60vw; background: var(--c1); top: -15%; left: -10%; animation: drift1 28s ease-in-out infinite; }
+  .blob.b2 { width: 55vw; height: 55vw; background: var(--c2); top: 30%;  right: -15%; animation: drift2 34s ease-in-out infinite; }
+  .blob.b3 { width: 45vw; height: 45vw; background: var(--c3); bottom: -20%; left: 20%; animation: drift3 40s ease-in-out infinite; }
+  .blob.b4 { width: 50vw; height: 50vw; background: var(--c4); top: 10%; left: 30%; animation: drift4 32s ease-in-out infinite; opacity: 0.4; }
+  .blob.b5 { width: 35vw; height: 35vw; background: var(--c5); bottom: 10%; right: 10%; animation: drift5 38s ease-in-out infinite; opacity: 0.45; }
+
+  @keyframes drift1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(8vw, 12vh) scale(1.1); }
+    66%      { transform: translate(-5vw, 20vh) scale(0.95); }
+  }
+  @keyframes drift2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(-15vw, -10vh) scale(1.15); }
+  }
+  @keyframes drift3 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    25%      { transform: translate(15vw, -8vh) scale(1.05); }
+    75%      { transform: translate(-10vw, -15vh) scale(0.9); }
+  }
+  @keyframes drift4 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(20vw, 15vh) scale(1.2); }
+  }
+  @keyframes drift5 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    40%      { transform: translate(-18vw, 10vh) scale(1.1); }
+    80%      { transform: translate(5vw, -12vh) scale(0.95); }
+  }
+
+  /* Subtle grain overlay for premium feel */
+  .grain {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.6'/></svg>");
+  }
+
+  /* Dark vignette so the chat stays readable */
+  .vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.35) 100%);
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .blob { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="scene" aria-hidden="true">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <div class="blob b4"></div>
+    <div class="blob b5"></div>
+  </div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+</body>
+</html>
