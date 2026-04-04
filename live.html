@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>xatframe — live</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05040a; cursor: default; font-family: 'SF Mono', Monaco, 'Courier New', monospace; color: #fafafa; }
+  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+
+  .stats {
+    position: fixed; top: 16px; left: 16px; z-index: 10;
+    background: rgba(5, 4, 10, 0.75);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    padding: 10px 14px; font-size: 11px;
+    backdrop-filter: blur(8px); letter-spacing: 0.02em;
+  }
+  .stats-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .stats-dot { width: 6px; height: 6px; border-radius: 50%; background: #4ADE80; box-shadow: 0 0 8px rgba(74,222,128,0.6); animation: pulse 2s ease-in-out infinite; }
+  .stats-label { color: rgba(250,250,250,0.4); text-transform: uppercase; font-weight: 600; letter-spacing: 0.08em; font-size: 9px; }
+  .stats-value { color: #fafafa; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stats-brand { color: #8b5cf6; font-weight: 700; letter-spacing: 0.1em; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 2;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%);
+  }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0.035; z-index: 3;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.6'/></svg>");
+  }
+</style>
+</head>
+<body>
+  <canvas id="c" aria-hidden="true"></canvas>
+  <div class="stats" id="stats">
+    <div class="stats-brand">ICP·BOTS NETWORK</div>
+    <div class="stats-row"><span class="stats-dot"></span><span class="stats-label">Live</span></div>
+    <div class="stats-row"><span class="stats-label">Bots:</span><span class="stats-value" id="stat-bots">—</span></div>
+    <div class="stats-row"><span class="stats-label">Users:</span><span class="stats-value" id="stat-users">—</span></div>
+  </div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+<script type="module">
+  // === CONFIG ===
+  const API_URL = 'https://api.icpbots.com'; // change to your prod API
+  const POLL_INTERVAL = 15000; // refresh every 15s
+  const USE_MOCK = true; // set to false when API is live with CORS enabled
+
+  const MOCK_BOTS = [
+    { id: '1', name: 'VibeBot', chat: 'Anime', plan: 'pro', status: 'online', users: 42 },
+    { id: '2', name: 'ModBot', chat: 'Gaming', plan: 'starter', status: 'online', users: 18 },
+    { id: '3', name: 'ChatBot', chat: 'Music', plan: 'pro', status: 'online', users: 67 },
+    { id: '4', name: 'HelpBot', chat: 'Help', plan: 'enterprise', status: 'online', users: 23 },
+    { id: '5', name: 'WelcomeBot', chat: 'Lobby', plan: 'pro', status: 'online', users: 31 },
+    { id: '6', name: 'GameBot', chat: 'Poker', plan: 'starter', status: 'starting', users: 0 },
+    { id: '7', name: 'AIBot', chat: 'AI', plan: 'enterprise', status: 'online', users: 88 },
+    { id: '8', name: 'PriceBot', chat: 'Trade', plan: 'pro', status: 'online', users: 54 },
+    { id: '9', name: 'TestBot', chat: 'Dev', plan: 'starter', status: 'stopped', users: 0 },
+    { id: '10', name: 'NightBot', chat: 'Night', plan: 'pro', status: 'online', users: 29 },
+    { id: '11', name: 'TalkBot', chat: 'Chat', plan: 'starter', status: 'online', users: 14 },
+    { id: '12', name: 'FunBot', chat: 'Fun', plan: 'pro', status: 'online', users: 46 },
+  ];
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio, 2);
+
+  function resize() {
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    ctx.scale(dpr, dpr);
+  }
+  resize();
+  window.addEventListener('resize', () => { resize(); layoutNodes(); });
+
+  // Colors
+  const PLAN_COLORS = {
+    starter:    '#4ADE80',
+    pro:        '#8b5cf6',
+    enterprise: '#06b6d4',
+  };
+  const STATUS_COLORS = {
+    online:   '#4ADE80',
+    starting: '#FCD34D',
+    idle:     '#FCD34D',
+    stopped:  '#F87171',
+    error:    '#F87171',
+  };
+
+  // === STATE ===
+  let bots = [];
+  let nodes = [];
+  let connections = [];
+  let packets = [];
+  let mouse = { x: 0, y: 0 };
+
+  window.addEventListener('pointermove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+
+  // Build nodes from bot data
+  function layoutNodes() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const cx = w / 2, cy = h / 2;
+
+    // Group by plan → 3 clusters
+    const planGroups = { starter: [], pro: [], enterprise: [] };
+    bots.forEach((b) => { if (planGroups[b.plan]) planGroups[b.plan].push(b); else planGroups.starter.push(b); });
+
+    const clusters = [
+      { name: 'starter',    cx: w * 0.22, cy: cy, r: Math.min(w, h) * 0.18 },
+      { name: 'pro',        cx: cx,       cy: cy, r: Math.min(w, h) * 0.22 },
+      { name: 'enterprise', cx: w * 0.78, cy: cy, r: Math.min(w, h) * 0.18 },
+    ];
+
+    nodes = [];
+    clusters.forEach((cluster) => {
+      const group = planGroups[cluster.name];
+      group.forEach((b, i) => {
+        const angle = (i / Math.max(group.length, 1)) * Math.PI * 2 + Math.random() * 0.3;
+        const radius = cluster.r * (0.5 + Math.random() * 0.5);
+        nodes.push({
+          bot: b,
+          x: cluster.cx + Math.cos(angle) * radius,
+          y: cluster.cy + Math.sin(angle) * radius,
+          cluster: cluster.name,
+          pulse: Math.random() * Math.PI * 2,
+        });
+      });
+    });
+
+    // Connect nodes in same cluster + random cross-cluster links
+    connections = [];
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[i].x - nodes[j].x;
+        const dy = nodes[i].y - nodes[j].y;
+        const d = Math.hypot(dx, dy);
+        if (d < 180 || (Math.random() < 0.04 && nodes[i].cluster !== nodes[j].cluster)) {
+          connections.push({ a: i, b: j });
+        }
+      }
+    }
+
+    // Rebuild packets
+    packets = [];
+    for (const c of connections) {
+      if (Math.random() < 0.5) {
+        packets.push({
+          conn: c,
+          t: Math.random(),
+          speed: 0.003 + Math.random() * 0.006,
+          dir: Math.random() > 0.5 ? 1 : -1,
+        });
+      }
+    }
+  }
+
+  // === DATA FETCH ===
+  async function fetchData() {
+    if (USE_MOCK) {
+      bots = MOCK_BOTS;
+      document.getElementById('stat-bots').textContent = bots.filter(b => b.status === 'online').length;
+      document.getElementById('stat-users').textContent = bots.reduce((s, b) => s + b.users, 0);
+      layoutNodes();
+      return;
+    }
+    try {
+      const [botsRes, statsRes] = await Promise.all([
+        fetch(`${API_URL}/api/public/bots`).then(r => r.json()),
+        fetch(`${API_URL}/api/public/stats`).then(r => r.json()),
+      ]);
+      bots = Array.isArray(botsRes) ? botsRes : [];
+      document.getElementById('stat-bots').textContent = statsRes.bots_online ?? 0;
+      document.getElementById('stat-users').textContent = statsRes.total_users ?? 0;
+      layoutNodes();
+    } catch (e) {
+      console.warn('API fetch failed, using mock data', e);
+      bots = MOCK_BOTS;
+      layoutNodes();
+    }
+  }
+
+  fetchData();
+  setInterval(fetchData, POLL_INTERVAL);
+
+  // === RENDER LOOP ===
+  let lastTime = performance.now();
+  function draw() {
+    const now = performance.now();
+    const dt = (now - lastTime) / 16.667;
+    lastTime = now;
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    // Clear
+    ctx.fillStyle = '#05040a';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(139,92,246,0.05)';
+    ctx.lineWidth = 1;
+    const gridSize = 40;
+    for (let x = 0; x < w; x += gridSize) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let y = 0; y < h; y += gridSize) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+
+    // Connections
+    ctx.strokeStyle = 'rgba(6,182,212,0.15)';
+    ctx.lineWidth = 1;
+    for (const c of connections) {
+      const a = nodes[c.a], b = nodes[c.b];
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+
+    // Packets
+    for (const p of packets) {
+      p.t += p.speed * p.dir * dt;
+      if (p.t > 1) { p.t = 0; p.dir = Math.random() > 0.5 ? 1 : -1; }
+      if (p.t < 0) { p.t = 1; p.dir = Math.random() > 0.5 ? 1 : -1; }
+      const a = nodes[p.conn.a], b = nodes[p.conn.b];
+      const x = a.x + (b.x - a.x) * p.t;
+      const y = a.y + (b.y - a.y) * p.t;
+
+      // Halo
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, 12);
+      grad.addColorStop(0, 'rgba(240,171,252,0.6)');
+      grad.addColorStop(1, 'rgba(240,171,252,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
+
+      // Core dot
+      ctx.fillStyle = '#f0abfc';
+      ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Nodes (server racks)
+    for (const node of nodes) {
+      node.pulse += 0.03 * dt;
+      const pulseStr = 0.5 + 0.5 * Math.sin(node.pulse);
+      const statusColor = STATUS_COLORS[node.bot.status] || '#888';
+      const planColor = PLAN_COLORS[node.bot.plan] || '#888';
+
+      // Mouse proximity highlight
+      const mdx = mouse.x - node.x;
+      const mdy = mouse.y - node.y;
+      const mdist = Math.hypot(mdx, mdy);
+      const hover = mdist < 80 ? (1 - mdist / 80) : 0;
+
+      // Halo
+      const haloR = 18 + pulseStr * 6 + hover * 20;
+      const haloGrad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, haloR);
+      haloGrad.addColorStop(0, `${planColor}${node.bot.status === 'online' ? '44' : '22'}`);
+      haloGrad.addColorStop(1, `${planColor}00`);
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath(); ctx.arc(node.x, node.y, haloR, 0, Math.PI * 2); ctx.fill();
+
+      // Rack body
+      const size = 10 + hover * 4;
+      ctx.fillStyle = planColor;
+      ctx.globalAlpha = 0.15;
+      ctx.fillRect(node.x - size / 2, node.y - size, size, size * 2);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = planColor;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(node.x - size / 2, node.y - size, size, size * 2);
+
+      // Rack lines (horizontal slots)
+      ctx.strokeStyle = `${planColor}80`;
+      ctx.lineWidth = 0.8;
+      for (let i = 1; i < 4; i++) {
+        const ly = node.y - size + (i / 4) * size * 2;
+        ctx.beginPath();
+        ctx.moveTo(node.x - size / 2 + 2, ly);
+        ctx.lineTo(node.x + size / 2 - 2, ly);
+        ctx.stroke();
+      }
+
+      // Status LED
+      ctx.fillStyle = statusColor;
+      ctx.shadowBlur = 6 + pulseStr * 4;
+      ctx.shadowColor = statusColor;
+      ctx.beginPath();
+      ctx.arc(node.x + size / 2 - 2, node.y - size + 2, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Label on hover
+      if (hover > 0.5) {
+        ctx.fillStyle = 'rgba(5,4,10,0.85)';
+        const label = `${node.bot.name} · ${node.bot.chat}`;
+        ctx.font = 'bold 10px "SF Mono", monospace';
+        const w2 = ctx.measureText(label).width;
+        ctx.fillRect(node.x - w2/2 - 6, node.y + size + 8, w2 + 12, 18);
+        ctx.strokeStyle = `${planColor}80`;
+        ctx.strokeRect(node.x - w2/2 - 6, node.y + size + 8, w2 + 12, 18);
+        ctx.fillStyle = '#fafafa';
+        ctx.fillText(label, node.x - w2/2, node.y + size + 20);
+      }
+    }
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+
+  // Pause when tab hidden
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { lastTime = performance.now(); requestAnimationFrame(draw); }
+  });
+</script>
+</body>
+</html>
