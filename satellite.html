@@ -6,7 +6,7 @@
 <title>xatframe — satellite</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #05040a; cursor: default; font-family: -apple-system, "SF Pro Display", Arial, sans-serif; color: #fafafa; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: linear-gradient(180deg, #000060 0%, #000020 50%, #000000 100%); cursor: default; font-family: -apple-system, "SF Pro Display", Arial, sans-serif; color: #fafafa; }
   canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
   .overlay {
     position: fixed; top: 116px; left: 16px; z-index: 10;
@@ -84,15 +84,15 @@ const ACCENT = '#8b5cf6';  // violet ICPBots
 const canvas = document.getElementById('c');
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
 } catch (e) { canvas.style.display = 'none'; throw e; }
 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x05040a, 1);
+renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x05040a, 0.035);
+scene.fog = new THREE.FogExp2(0x000020, 0.035);
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, 0, 8);
