@@ -266,6 +266,46 @@ satellite.add(backPanel);
   satellite.add(m);
 });
 
+// === MINI POD SATELLITES ===
+function createMiniPod() {
+  const pod = new THREE.Group();
+  // Body
+  pod.add(new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.35), wireframeMat));
+  // Mini solar panels
+  const panelGeo = new THREE.BoxGeometry(0.35, 0.18, 0.02);
+  const leftP = new THREE.Mesh(panelGeo, wireframeMat);
+  leftP.position.set(-0.32, 0, 0);
+  pod.add(leftP);
+  const rightP = new THREE.Mesh(panelGeo, wireframeMat);
+  rightP.position.set(0.32, 0, 0);
+  pod.add(rightP);
+  // Mini antenna
+  const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.15), wireframeMat);
+  ant.position.set(0, 0, 0.22);
+  ant.rotation.x = Math.PI / 2;
+  pod.add(ant);
+  // Tip sphere
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), wireframeMat);
+  tip.position.set(0, 0, 0.3);
+  pod.add(tip);
+  return pod;
+}
+
+const pods = [];
+const podCount = 5;
+for (let i = 0; i < podCount; i++) {
+  const pod = createMiniPod();
+  scene.add(pod);
+  pods.push({
+    mesh: pod,
+    radius: 2.2 + Math.random() * 0.6,
+    speed: 0.35 + Math.random() * 0.25,
+    phase: (i / podCount) * Math.PI * 2,
+    tilt: (Math.random() - 0.5) * 0.6,
+    yOffset: (Math.random() - 0.5) * 0.8,
+  });
+}
+
 // === CENTRAL CORE (ICP·BOTS sun) ===
 const coreGroup = new THREE.Group();
 scene.add(coreGroup);
@@ -344,6 +384,16 @@ function loop() {
   // Solar panels gentle flap
   leftPanel.rotation.z = -0.3 + Math.sin(time * 0.1) * 0.05;
   rightPanel.rotation.z = 0.3 - Math.sin(time * 0.1) * 0.05;
+
+  // Mini pods orbit
+  pods.forEach((p) => {
+    const a = time * p.speed + p.phase;
+    p.mesh.position.x = Math.cos(a) * p.radius;
+    p.mesh.position.z = Math.sin(a) * p.radius;
+    p.mesh.position.y = p.yOffset + Math.sin(a * 0.7) * 0.3;
+    p.mesh.rotation.y = a + Math.PI / 2;
+    p.mesh.rotation.x = p.tilt;
+  });
 
   // Core pulse
   const pulse = 0.5 + 0.5 * Math.sin(time * 1.2);
