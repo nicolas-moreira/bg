@@ -312,19 +312,19 @@ scene.add(coreGroup);
 
 const core = new THREE.Mesh(
   new THREE.SphereGeometry(0.35, 24, 24),
-  new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.9 })
+  new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0 })
 );
 coreGroup.add(core);
 
 const coreHalo = new THREE.Mesh(
   new THREE.SphereGeometry(0.7, 24, 24),
-  new THREE.MeshBasicMaterial({ color: 0xec4899, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending })
+  new THREE.MeshBasicMaterial({ color: 0xec4899, transparent: true, opacity: 0, blending: THREE.AdditiveBlending })
 );
 coreGroup.add(coreHalo);
 
 const coreOuter = new THREE.Mesh(
   new THREE.SphereGeometry(1.4, 16, 16),
-  new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending })
+  new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending })
 );
 coreGroup.add(coreOuter);
 
