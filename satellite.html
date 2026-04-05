@@ -337,7 +337,7 @@ coreGroup.add(coreWire);
 
 // === ORBITAL TRAIL RING ===
 const trailGeo = new THREE.RingGeometry(3.9, 4.0, 128);
-const trailMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.1, side: THREE.DoubleSide });
+const trailMat = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0, side: THREE.DoubleSide });
 const trail = new THREE.Mesh(trailGeo, trailMat);
 trail.rotation.x = Math.PI / 2;
 scene.add(trail);
