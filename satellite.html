@@ -68,7 +68,8 @@
   <div class="overlay">
     <div class="overlay-brand">ICP·BOTS / NETWORK</div>
     <div class="overlay-row"><span class="overlay-dot"></span>SATELLITE ONLINE</div>
-    <div class="overlay-row">ORBIT: STABLE</div>
+    <div class="overlay-row">BOTS ONLINE: <span id="stat-bots">—</span></div>
+    <div class="overlay-row">USERS: <span id="stat-users">—</span></div>
   </div>
 
   <div class="brand-bottom" aria-hidden="true">AI · XAT · NETWORK</div>
@@ -364,6 +365,18 @@ function loop() {
   requestAnimationFrame(loop);
 }
 loop();
+
+// === LIVE STATS ===
+async function fetchStats() {
+  try {
+    const r = await fetch('https://icpbots.com/api/public/stats', { cache: 'no-store' });
+    const d = await r.json();
+    document.getElementById('stat-bots').textContent = d.bots_online ?? '—';
+    document.getElementById('stat-users').textContent = d.total_users ?? '—';
+  } catch (e) {}
+}
+fetchStats();
+setInterval(fetchStats, 15000);
 </script>
 </body>
 </html>
