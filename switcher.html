@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICPBOTS — Chat Switcher</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; color: #fff; font-family: "SF Mono", Monaco, monospace; height: 100vh; display: flex; flex-direction: column; }
+  .bar { display: flex; gap: 4px; padding: 8px; background: #111; border-bottom: 1px solid #222; flex-wrap: wrap; align-items: center; }
+  .bar-label { font-size: 11px; color: #8b5cf6; font-weight: 700; letter-spacing: 0.1em; margin-right: 8px; }
+  .tab { padding: 6px 14px; font-size: 11px; background: #1a1a2e; color: #888; border: 1px solid #222; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .tab:hover { background: #222; color: #ccc; }
+  .tab.active { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
+  .add-form { display: flex; gap: 4px; margin-left: auto; }
+  .add-form input { background: #1a1a2e; border: 1px solid #333; color: #fff; padding: 6px 10px; font-size: 11px; font-family: inherit; width: 140px; }
+  .add-form button { padding: 6px 10px; font-size: 11px; background: #1a1a2e; color: #8b5cf6; border: 1px solid #333; cursor: pointer; font-family: inherit; }
+  .add-form button:hover { background: #222; }
+  iframe { flex: 1; border: none; width: 100%; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span class="bar-label">ICPBOTS</span>
+    <div id="tabs"></div>
+    <div class="add-form">
+      <input id="newChat" placeholder="chat name" />
+      <button onclick="addChat()">+ ADD</button>
+    </div>
+  </div>
+  <iframe id="frame" src=""></iframe>
+
+<script>
+const defaultChats = ['icpbots', 'test1', 'test2', 'test3', 'test4', 'test5', 'test6', 'test7', 'test8', 'test9', 'test10'];
+let chats = JSON.parse(localStorage.getItem('xat-chats')) || defaultChats;
+let active = localStorage.getItem('xat-active') || chats[0];
+
+function save() {
+  localStorage.setItem('xat-chats', JSON.stringify(chats));
+  localStorage.setItem('xat-active', active);
+}
+
+function render() {
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = '';
+  chats.forEach(name => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (name === active ? ' active' : '');
+    btn.textContent = name;
+    btn.onclick = () => switchChat(name);
+    btn.oncontextmenu = (e) => { e.preventDefault(); removeChat(name); };
+    tabs.appendChild(btn);
+  });
+}
+
+function switchChat(name) {
+  active = name;
+  document.getElementById('frame').src = 'https://xat.com/web_gear/chat/embed.php?id=' + encodeURIComponent(name);
+  save();
+  render();
+}
+
+function addChat() {
+  const input = document.getElementById('newChat');
+  const name = input.value.trim();
+  if (name && !chats.includes(name)) {
+    chats.push(name);
+    save();
+    switchChat(name);
+  }
+  input.value = '';
+}
+
+function removeChat(name) {
+  if (chats.length <= 1) return;
+  chats = chats.filter(c => c !== name);
+  if (active === name) active = chats[0];
+  save();
+  switchChat(active);
+}
+
+document.getElementById('newChat').addEventListener('keydown', e => { if (e.key === 'Enter') addChat(); });
+
+render();
+switchChat(active);
+</script>
+</body>
+</html>
