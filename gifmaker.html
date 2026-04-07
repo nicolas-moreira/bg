@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICPBOTS — GIF Strip Maker for xat</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: linear-gradient(#008, #004); color: #fff; font-family: "SF Mono", Monaco, monospace; min-height: 100vh; }
+  .header { padding: 20px 24px; border-bottom: 1px solid rgba(139,92,246,0.2); display: flex; align-items: center; gap: 16px; }
+  .header h1 { font-size: 14px; color: #8b5cf6; letter-spacing: 0.1em; }
+  .header span { font-size: 11px; color: rgba(255,255,255,0.4); }
+  .main { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+
+  .dropzone {
+    border: 2px dashed rgba(139,92,246,0.4); border-radius: 8px;
+    padding: 48px; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: rgba(139,92,246,0.05);
+  }
+  .dropzone:hover, .dropzone.dragover { border-color: #8b5cf6; background: rgba(139,92,246,0.1); }
+  .dropzone p { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 8px; }
+  .dropzone .big { font-size: 14px; color: #8b5cf6; margin-bottom: 4px; }
+
+  input[type="file"] { display: none; }
+
+  .controls { margin-top: 24px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .controls label { font-size: 11px; color: rgba(255,255,255,0.5); }
+  .controls input[type="number"], .controls select {
+    background: #1a1a2e; border: 1px solid #333; color: #fff;
+    padding: 6px 10px; font-size: 11px; font-family: inherit; width: 70px; border-radius: 4px;
+  }
+  .controls select { width: auto; }
+
+  .btn {
+    padding: 8px 16px; font-size: 11px; font-family: inherit;
+    border: 1px solid #8b5cf6; background: rgba(139,92,246,0.15);
+    color: #8b5cf6; cursor: pointer; border-radius: 4px; transition: all 0.15s;
+  }
+  .btn:hover { background: #8b5cf6; color: #fff; }
+  .btn:disabled { opacity: 0.3; cursor: default; }
+  .btn.primary { background: #8b5cf6; color: #fff; }
+  .btn.primary:hover { background: #7c3aed; }
+
+  .preview { margin-top: 24px; }
+  .preview h3 { font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 0.1em; margin-bottom: 12px; }
+
+  .frames-grid {
+    display: flex; flex-wrap: wrap; gap: 4px; padding: 16px;
+    background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);
+  }
+  .frames-grid canvas { border: 1px solid rgba(139,92,246,0.2); border-radius: 2px; }
+
+  .strip-preview {
+    margin-top: 24px; overflow-x: auto; padding: 16px;
+    background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);
+  }
+  .strip-preview canvas { border: 1px solid rgba(139,92,246,0.3); }
+
+  .anim-preview {
+    margin-top: 24px; padding: 16px; text-align: center;
+    background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);
+  }
+  .anim-preview canvas { border: 1px solid rgba(139,92,246,0.3); border-radius: 4px; image-rendering: pixelated; }
+
+  .info { margin-top: 12px; font-size: 10px; color: rgba(255,255,255,0.3); }
+  .stats { display: flex; gap: 16px; margin-top: 16px; }
+  .stat { font-size: 11px; color: rgba(255,255,255,0.5); }
+  .stat b { color: #8b5cf6; }
+
+  .actions { margin-top: 24px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .hidden { display: none; }
+
+  .url-section { margin-top: 24px; padding: 16px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+  .url-section input {
+    width: 100%; background: #1a1a2e; border: 1px solid #333; color: #fff;
+    padding: 8px 12px; font-size: 11px; font-family: inherit; border-radius: 4px; margin-top: 8px;
+  }
+  .url-section p { font-size: 10px; color: rgba(255,255,255,0.3); margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>ICPBOTS GIF MAKER</h1>
+    <span>Animated avatar strip generator for xat</span>
+  </div>
+
+  <div class="main">
+    <div class="dropzone" id="dropzone">
+      <div class="big">Drop a GIF here or click to upload</div>
+      <p>Supports animated GIF files</p>
+    </div>
+    <input type="file" id="fileInput" accept="image/gif">
+
+    <div class="controls">
+      <label>Size:</label>
+      <input type="number" id="frameSize" value="80" min="16" max="256"> <span style="font-size:11px;color:#555">px</span>
+      <label style="margin-left:12px">Max frames:</label>
+      <input type="number" id="maxFrames" value="0" min="0" max="200"> <span style="font-size:11px;color:#555">0 = all</span>
+      <label style="margin-left:12px">Speed:</label>
+      <select id="speedMult">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+      </select>
+      <button class="btn" id="reprocessBtn" disabled>Reprocess</button>
+    </div>
+
+    <div id="output" class="hidden">
+      <div class="stats" id="stats"></div>
+
+      <div class="anim-preview">
+        <h3>ANIMATION PREVIEW</h3>
+        <canvas id="animCanvas"></canvas>
+      </div>
+
+      <div class="preview">
+        <h3>FRAMES</h3>
+        <div class="frames-grid" id="framesGrid"></div>
+      </div>
+
+      <div class="strip-preview">
+        <h3>STRIP (use this on xat)</h3>
+        <canvas id="stripCanvas"></canvas>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" id="downloadStrip">Download Strip PNG</button>
+        <button class="btn" id="downloadGif">Download Resized GIF</button>
+        <button class="btn" id="copyUrl">Copy imgur upload instructions</button>
+      </div>
+
+      <div class="url-section">
+        <h3 style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:0.1em;">HOW TO USE ON XAT</h3>
+        <p>1. Download the strip PNG above</p>
+        <p>2. Upload it to imgur.com or another image host</p>
+        <p>3. Copy the direct image link (must end in .png)</p>
+        <p>4. Paste the link as your xat avatar</p>
+        <p>5. You need the <b style="color:#8b5cf6">Animate</b> power enabled</p>
+      </div>
+    </div>
+  </div>
+
+<script src="https://unpkg.com/gifuct-js@2.1.2/dist/gifuct-js.min.js"></script>
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const output = document.getElementById('output');
+const framesGrid = document.getElementById('framesGrid');
+const stripCanvas = document.getElementById('stripCanvas');
+const animCanvas = document.getElementById('animCanvas');
+const statsEl = document.getElementById('stats');
+let currentFrames = [];
+let currentDelays = [];
+let animInterval = null;
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'image/gif') processFile(file);
+});
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files[0]) processFile(e.target.files[0]);
+});
+
+document.getElementById('reprocessBtn').addEventListener('click', () => {
+  if (currentFrames.length) rebuildOutput();
+});
+
+let rawGifData = null;
+
+async function processFile(file) {
+  dropzone.querySelector('.big').textContent = 'Processing...';
+
+  const buf = await file.arrayBuffer();
+  rawGifData = buf;
+  const gif = gifuct.parseGIF(buf);
+  const frames = gifuct.decompressFrames(gif, true);
+
+  if (!frames.length) {
+    dropzone.querySelector('.big').textContent = 'No frames found. Try another GIF.';
+    return;
+  }
+
+  currentFrames = frames;
+  currentDelays = frames.map(f => f.delay || 100);
+
+  dropzone.querySelector('.big').textContent = file.name;
+  dropzone.querySelector('p').textContent = `${frames.length} frames detected — click to change GIF`;
+  document.getElementById('reprocessBtn').disabled = false;
+
+  rebuildOutput();
+}
+
+function rebuildOutput() {
+  const size = parseInt(document.getElementById('frameSize').value) || 80;
+  const maxF = parseInt(document.getElementById('maxFrames').value) || 0;
+  const speed = parseFloat(document.getElementById('speedMult').value) || 1;
+
+  let frames = currentFrames;
+  if (maxF > 0 && frames.length > maxF) {
+    const step = frames.length / maxF;
+    const sampled = [];
+    for (let i = 0; i < maxF; i++) sampled.push(frames[Math.floor(i * step)]);
+    frames = sampled;
+  }
+
+  // Render frames to canvases
+  const renderedFrames = [];
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d');
+
+  // Get GIF dimensions from first frame
+  const gifW = frames[0].dims.width;
+  const gifH = frames[0].dims.height;
+
+  // Composite canvas (full GIF size)
+  const compCanvas = document.createElement('canvas');
+  compCanvas.width = gifW;
+  compCanvas.height = gifH;
+  const compCtx = compCanvas.getContext('2d');
+
+  framesGrid.innerHTML = '';
+
+  frames.forEach((frame, i) => {
+    // Handle disposal
+    if (i === 0) {
+      compCtx.clearRect(0, 0, gifW, gifH);
+    }
+
+    const fCanvas = document.createElement('canvas');
+    fCanvas.width = frame.dims.width;
+    fCanvas.height = frame.dims.height;
+    const fCtx = fCanvas.getContext('2d');
+    const imgData = fCtx.createImageData(frame.dims.width, frame.dims.height);
+    imgData.data.set(frame.patch);
+    fCtx.putImageData(imgData, 0, 0);
+
+    compCtx.drawImage(fCanvas, frame.dims.left, frame.dims.top);
+
+    // Scale to target size
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = size;
+    outCanvas.height = size;
+    const outCtx = outCanvas.getContext('2d');
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = 'high';
+
+    // Crop to square (center)
+    const minDim = Math.min(gifW, gifH);
+    const sx = (gifW - minDim) / 2;
+    const sy = (gifH - minDim) / 2;
+    outCtx.drawImage(compCanvas, sx, sy, minDim, minDim, 0, 0, size, size);
+
+    renderedFrames.push(outCanvas);
+
+    // Show in grid
+    const display = document.createElement('canvas');
+    display.width = 40;
+    display.height = 40;
+    display.style.width = '40px';
+    display.style.height = '40px';
+    display.getContext('2d').drawImage(outCanvas, 0, 0, 40, 40);
+    framesGrid.appendChild(display);
+
+    // Handle disposal for next frame
+    if (frame.disposalType === 2) {
+      compCtx.clearRect(frame.dims.left, frame.dims.top, frame.dims.width, frame.dims.height);
+    }
+  });
+
+  // Build strip
+  stripCanvas.width = size * renderedFrames.length;
+  stripCanvas.height = size;
+  const stripCtx = stripCanvas.getContext('2d');
+  renderedFrames.forEach((fc, i) => {
+    stripCtx.drawImage(fc, i * size, 0);
+  });
+
+  // Animation preview
+  animCanvas.width = size;
+  animCanvas.height = size;
+  animCanvas.style.width = Math.max(size, 80) + 'px';
+  animCanvas.style.height = Math.max(size, 80) + 'px';
+  const animCtx = animCanvas.getContext('2d');
+
+  if (animInterval) clearInterval(animInterval);
+  let fi = 0;
+  function drawFrame() {
+    animCtx.clearRect(0, 0, size, size);
+    animCtx.drawImage(renderedFrames[fi], 0, 0);
+    fi = (fi + 1) % renderedFrames.length;
+  }
+  drawFrame();
+  const avgDelay = currentDelays.reduce((a, b) => a + b, 0) / currentDelays.length;
+  animInterval = setInterval(drawFrame, Math.max(20, avgDelay / speed));
+
+  // Stats
+  statsEl.innerHTML = `
+    <div class="stat">Frames: <b>${renderedFrames.length}</b></div>
+    <div class="stat">Size: <b>${size}x${size}</b></div>
+    <div class="stat">Strip: <b>${stripCanvas.width}x${stripCanvas.height}</b></div>
+    <div class="stat">Original: <b>${gifW}x${gifH}</b></div>
+  `;
+
+  // Download strip
+  document.getElementById('downloadStrip').onclick = () => {
+    const a = document.createElement('a');
+    a.download = 'xat-strip-' + size + '.png';
+    a.href = stripCanvas.toDataURL('image/png');
+    a.click();
+  };
+
+  // Download resized GIF (just downloads original for now)
+  document.getElementById('downloadGif').onclick = () => {
+    if (rawGifData) {
+      const blob = new Blob([rawGifData], { type: 'image/gif' });
+      const a = document.createElement('a');
+      a.download = 'avatar.gif';
+      a.href = URL.createObjectURL(blob);
+      a.click();
+    }
+  };
+
+  output.classList.remove('hidden');
+}
+</script>
+</body>
+</html>
